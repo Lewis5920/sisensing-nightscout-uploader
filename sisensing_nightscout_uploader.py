@@ -2,6 +2,7 @@
 """
 硅基动感亲友分享 -> Nightscout 上传脚本
 通过硅基 SIJOY 小程序的亲友分享 API 拉取血糖数据，上传到 Nightscout
+自动选择有最新数据的设备，换传感器后无需手动修改 deviceId
 """
 
 import requests
@@ -35,11 +36,11 @@ NS_URL = os.environ.get("NS_URL", "https://9FC3BAB952CCC1A8.abwsz.com")
 # API-SECRET = 网站登录密码的 SHA1 哈希
 NS_API_SECRET = os.environ.get("NS_API_SECRET", "1160a3a804ed9b811866fa081170667e267c2908")
 
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "300"))  # 秒
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))  # 秒，默认30秒
 
 
 def fetch_glucose():
-    """从硅基 API 拉取血糖数据"""
+    """从硅基 API 拉取血糖数据，自动选择有最新数据的设备"""
     try:
         resp = requests.get(SI_API, params=SI_PARAMS, headers=SI_HEADERS, timeout=30)
         data = resp.json()
@@ -51,12 +52,24 @@ def fetch_glucose():
         latest_value = device_info.get("latestValue")
         latest_time = device_info.get("latestTime")
 
-        # 找到对应 deviceId 的 glucoseInfos
-        glucose_infos = []
-        for item in data["data"].get("deviceGlucoseInfos", []):
-            if item["deviceId"] == SI_PARAMS["deviceId"]:
-                glucose_infos = item.get("glucoseInfos", [])
-                break
+        # 自动选择有最新数据的设备（换传感器后自动切换，无需手动改deviceId）
+        all_devices = data["data"].get("deviceGlucoseInfos", [])
+        best_device = None
+        best_latest_time = 0
+        for item in all_devices:
+            glucose_list = item.get("glucoseInfos", [])
+            if glucose_list:
+                device_latest = max(r["t"] for r in glucose_list)
+                if device_latest > best_latest_time:
+                    best_latest_time = device_latest
+                    best_device = item
+
+        if best_device:
+            glucose_infos = best_device.get("glucoseInfos", [])
+            print(f"[INFO] 自动选择设备: {best_device['deviceId']} (最新数据时间: {best_latest_time})")
+        else:
+            glucose_infos = []
+            print("[WARN] 没有找到有数据的设备")
 
         return glucose_infos, {"latestValue": latest_value, "latestTime": latest_time}
     except Exception as e:
