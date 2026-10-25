@@ -1,0 +1,31 @@
+name: 上传血糖到Nightscout
+
+on:
+  schedule:
+    # 每5分钟运行一次（GitHub Actions cron 最小间隔5分钟）
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 拉取并上传血糖数据
+        env:
+          SI_APP_CODE: ${{ secrets.SI_APP_CODE }}
+          SI_APP_CODE_HEADER: ${{ secrets.SI_APP_CODE_HEADER }}
+          SI_AUTH_TOKEN: ${{ secrets.SI_AUTH_TOKEN }}
+          SI_DEVICE_ID: ${{ secrets.SI_DEVICE_ID }}
+          SI_FOLLOW_RELATION_ID: ${{ secrets.SI_FOLLOW_RELATION_ID }}
+          NS_URL: ${{ secrets.NS_URL }}
+          NS_API_SECRET: ${{ secrets.NS_API_SECRET }}
+        run: python3 sisensing_nightscout_uploader.py
